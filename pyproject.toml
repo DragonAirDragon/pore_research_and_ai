@@ -1,0 +1,24 @@
+[project]
+name = "pores_generator"
+readme = "README.md"
+version = "0.0.1"
+
+dependencies = [
+  "numpy",
+  "opencv-python-headless",
+  "tqdm",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+
+  "sphinx",
+  "furo",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "PL"]
+
+[tool.ruff.format]
+quote-style = "double"

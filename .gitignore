@@ -1,0 +1,20 @@
+# Data directories
+data/
+outputs/
+dataset*/
+output/
+*.png
+*.jpg
+*.csv
+
+# Model checkpoints
+*.pth
+*.pt
+checkpoints*/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.DS_Store

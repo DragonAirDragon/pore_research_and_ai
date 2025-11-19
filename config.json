@@ -1,0 +1,66 @@
+{
+  "image_settings": {
+    "width": 200,
+    "height": 200,
+    "total_images": 10
+  },
+  "pore_settings": {
+    "small_pores": {
+      "count_range": [
+        15,
+        30
+      ],
+      "radius_mean_relative": 0.04,
+      "min_distance_relative": 0.015,
+      "stretch_enabled": true,
+      "stretch_factor_range": [
+        1,
+        1.5
+      ],
+      "rotation_enabled": true
+    },
+    "medium_pores": {
+      "count_range": [
+        10,
+        20
+      ],
+      "radius_mean_relative": 0.075,
+      "min_distance_relative": 0.025,
+      "stretch_enabled": true,
+      "stretch_factor_range": [
+        1,
+        1.5
+      ],
+      "rotation_enabled": true
+    },
+    "large_pores": {
+      "count_range": [
+        5,
+        10
+      ],
+      "radius_mean_relative": 0.125,
+      "min_distance_relative": 0.04,
+      "stretch_enabled": true,
+      "stretch_factor_range": [
+        1,
+        1.5
+      ],
+      "rotation_enabled": true
+    }
+  },
+  "noise_settings": {
+    "min_gray_value": 100,
+    "max_gray_value": 200,
+    "noise_intensity": 0.1,
+    "pore_noise": {
+      "enabled": true,
+      "min_value": 0,
+      "max_value": 100,
+      "texture_enabled": true
+    }
+  },
+  "output_settings": {
+    "clean_dir": "./output/clean_background",
+    "noisy_dir": "./output/noisy_background"
+  }
+}
