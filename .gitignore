@@ -4,7 +4,9 @@ outputs/
 dataset*/
 output/
 *.png
+!docs/images/*.png
 *.jpg
+!docs/images/*.jpg
 *.csv
 
 # Model checkpoints
