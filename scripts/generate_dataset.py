@@ -3,7 +3,14 @@
 import json
 import os
 import random
-from main import PoreImageGenerator
+import sys
+from pathlib import Path
+
+# Добавляем корневую директорию в PYTHONPATH
+ROOT_DIR = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
+from scripts.generate_images import PoreImageGenerator
 
 
 def create_varied_config(base_config: dict, variation_seed: int) -> dict:

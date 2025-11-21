@@ -6,7 +6,14 @@ import numpy as np
 import argparse
 import matplotlib.pyplot as plt
 from scipy import ndimage
-from model import RegressionUNet
+import sys
+from pathlib import Path
+
+# Добавляем корневую директорию в PYTHONPATH
+ROOT_DIR = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
+from models.regression.model import RegressionUNet
 
 def predict_pores(image_path, model_path, output_path=None, threshold=2.0):
     """Predicts pores using the regression model."""

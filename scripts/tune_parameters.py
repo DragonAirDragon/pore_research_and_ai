@@ -6,12 +6,13 @@ import numpy as np
 import csv
 from pathlib import Path
 
-# Add current directory to path to import src
-sys.path.append(os.getcwd())
+# Добавляем корневую директорию в PYTHONPATH
+ROOT_DIR = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT_DIR))
 
 from src.config_loader import ConfigLoader
-from test_integration import InstrumentedPoreGenerator
-from analyze_mask import analyze_pore_mask
+from tests.test_integration import InstrumentedPoreGenerator
+from scripts.analyze_mask import analyze_pore_mask
 
 def tune_watershed_radius():
     print("\n" + "="*50)

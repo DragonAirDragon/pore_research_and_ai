@@ -7,10 +7,11 @@ from pathlib import Path
 from tqdm import tqdm
 import sys
 
-# Add current directory to path
-sys.path.append(os.getcwd())
+# Добавляем корневую директорию в PYTHONPATH
+ROOT_DIR = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(ROOT_DIR))
 
-from main import PoreImageGenerator
+from scripts.generate_images import PoreImageGenerator
 
 def generate_distance_dataset(output_dir="dataset_regression", num_train=500, num_val=100):
     """Generates dataset with Distance Maps as targets."""

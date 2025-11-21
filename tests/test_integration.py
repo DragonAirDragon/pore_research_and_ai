@@ -6,11 +6,12 @@ import numpy as np
 import csv
 from pathlib import Path
 
-# Add current directory to path to import src
-sys.path.append(os.getcwd())
+# Добавляем корневую директорию в PYTHONPATH
+ROOT_DIR = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT_DIR))
 
 from src.pore_generator import PoreGenerator
-from analyze_mask import analyze_pore_mask
+from scripts.analyze_mask import analyze_pore_mask
 
 class InstrumentedPoreGenerator(PoreGenerator):
     """

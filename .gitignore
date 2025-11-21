@@ -9,8 +9,10 @@ output/
 
 # Model checkpoints
 *.pth
+!models/regression/checkpoints_augmented/best_model.pth
 *.pt
 checkpoints*/
+!models/regression/checkpoints_augmented/
 
 # Python
 __pycache__/

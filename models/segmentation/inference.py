@@ -5,7 +5,13 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from train import UNetWithAttention, PoreDataset, calculate_metrics
+import sys
+
+# Добавляем корневую директорию в PYTHONPATH
+ROOT_DIR = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(ROOT_DIR))
+
+from models.segmentation.train import UNetWithAttention, PoreDataset, calculate_metrics
 
 
 def load_model(checkpoint_path: str, device: torch.device):
