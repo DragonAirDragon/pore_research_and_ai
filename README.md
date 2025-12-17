@@ -1,155 +1,176 @@
-# Pore Analysis AI: Полное руководство
-
-Этот проект предназначен для автоматического обнаружения и анализа пор на SEM-изображениях керамики с использованием глубокого обучения (Regression UNet).
+Here is the **English translation**:
 
 ---
 
-## 0. Установка и Запуск
+# Pore Analysis AI: Complete Guide
 
-Перед началом работы необходимо подготовить окружение.
-
-1.  **Создайте виртуальное окружение:**
-    ```bash
-    python -m venv .venv
-    .venv\Scripts\activate
-    ```
-
-2.  **Установите зависимости:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-    *Для работы с GPU (NVIDIA) убедитесь, что установлен PyTorch с поддержкой CUDA.*
-
-3.  **Скачайте датасет:**
-    Для быстрого старта вы можете скачать готовый набор данных:
-    [Google Drive Link](https://drive.google.com/file/d/1D3RilH6dyAzNCyiDUmFHEfnJkgg7rz6o/view?usp=sharing)
+This project is designed for automatic detection and analysis of pores in ceramic SEM images using deep learning (Regression UNet).
 
 ---
 
-## 1. Правила разметки и Инструменты
+## 0. Installation and Setup
 
-Для обучения нейросети нам нужны качественные данные. Мы используем специальную утилиту для ручной разметки.
+Before starting, you need to prepare the environment.
 
-### Как определить пору?
-*   **Контраст:** Поры обычно темнее фона.
-*   **Форма:** Округлые или неправильные формы, но с видимой "глубиной".
-*   **Игнорируйте:** Царапины, тени от поверхности, неглубокие текстуры.
+1. **Create a virtual environment:**
+
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\activate
+   ```
+
+2. **Install dependencies:**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+   *For GPU support (NVIDIA), make sure PyTorch with CUDA is installed.*
+
+3. **Download the dataset:**
+   For a quick start, you can download a ready-made dataset:
+   [Google Drive Link](https://drive.google.com/file/d/1D3RilH6dyAzNCyiDUmFHEfnJkgg7rz6o/view?usp=sharing)
+
+---
+
+## 1. Annotation Rules and Tools
+
+High-quality annotations are required to train the neural network. We use a dedicated manual annotation tool.
+
+### How to identify a pore?
+
+* **Contrast:** Pores are usually darker than the background.
+* **Shape:** Rounded or irregular shapes with visible “depth.”
+* **Ignore:** Scratches, surface shadows, shallow textures.
 
 ![Manual Annotation Guide](docs/images/manual_annotation_guide.png)
 
-### Правило "Перешейка" (The Neck Rule)
-Как отличить одну слипшуюся пору от двух разных?
-*   **Одна пора:** Форма овальная или бобовидная, но без сужения.
-*   **Две поры:** Виден "перешеек" (сужение) между центрами. Размечайте их как два перекрывающихся круга.
+### The “Neck Rule”
+
+How to distinguish one merged pore from two separate pores?
+
+* **Single pore:** Oval or bean-like shape without narrowing.
+* **Two pores:** A visible “neck” (constriction) between centers. Annotate them as two overlapping circles.
 
 ![Merged Pore Annotation Guide](docs/images/merged_pore_guide.png)
 
-### Инструмент разметки (Annotator Tool)
-Мы разработали удобный GUI-инструмент для разметки.
+### Annotation Tool (Annotator Tool)
 
-**Запуск:**
+We developed a convenient GUI tool for annotation.
+
+**Launch:**
+
 ```bash
 python tools/annotator/main.py
 ```
 
-**Интерфейс:**
+**Interface:**
 ![Annotator UI](docs/images/ToolUI.png)
 
-**Функции:**
-*   **Рисование:** Левая кнопка мыши (тяните для радиуса).
-*   **Навигация:** Средняя кнопка (или Пробел + ЛКМ) для панорамирования, Колесо для зума.
-*   **Пипетка (P):** Кликните на пору, чтобы увидеть маску по порогу яркости (помогает отделить пору от фона).
-*   **Split View:** Слева список, по центру оригинал, справа предпросмотр эффектов.
-*   **Сохранение (S):** Сохраняет оригинал, маску и карту расстояний.
+**Features:**
+
+* **Drawing:** Left mouse button (drag to set radius).
+* **Navigation:** Middle mouse button (or Space + LMB) to pan, scroll wheel to zoom.
+* **Eyedropper (P):** Click on a pore to view a threshold-based mask (helps separate the pore from the background).
+* **Split View:** List on the left, original image in the center, effect preview on the right.
+* **Save (S):** Saves the original image, mask, and distance map.
 
 > [!CAUTION]
-> **Сохраняйте прогресс!**
-> 
-> Перед переключением на следующее изображение обязательно нажмите кнопку **Save (S)**.
-> В противном случае текущая разметка **не сохранится** и будет потеряна.
+> **Save your progress!**
+>
+> Before switching to the next image, always press **Save (S)**.
+> Otherwise, the current annotation **will not be saved** and will be lost.
 
 > [!IMPORTANT]
-> **Человеческий фактор и Экспертная оценка**
-> 
-> Результаты работы нейросети напрямую зависят от качества разметки. Ошибки человека станут ошибками модели.
-> *   **Экспертный контроль:** Крайне рекомендуется, чтобы разметку выполнял или проверял профильный специалист (химик/материаловед), понимающий структуру материала.
-> *   **Active Learning (Активное обучение):** Для достижения идеальных результатов используйте итеративный подход:
->     1. Разметьте 10-20 изображений.
->     2. Обучите модель.
->     3. Используйте модель для предразметки новых данных.
->     4. Эксперт исправляет ошибки модели.
->     5. Повторите обучение.
->     Такой цикл "разметка -> обучение -> проверка" каждые 10 изображений значительно ускоряет процесс и повышает точность.
+> **Human Factor and Expert Validation**
+>
+> The neural network’s performance directly depends on annotation quality. Human errors become model errors.
+>
+> * **Expert review:** It is strongly recommended that annotations be performed or reviewed by a domain expert (chemist/materials scientist) who understands the material structure.
+> * **Active Learning:** To achieve optimal results, use an iterative approach:
+>
+>   1. Annotate 10–20 images.
+>   2. Train the model.
+>   3. Use the model to pre-annotate new data.
+>   4. An expert corrects the model’s mistakes.
+>   5. Retrain the model.
+>
+>   This “annotate → train → review” cycle every 10 images significantly speeds up the process and improves accuracy.
 
 ---
 
-## 2. Концепция Distance Map
+## 2. Distance Map Concept
 
-Вместо обычной черно-белой маски (где 1 = пора, 0 = фон), мы генерируем **Distance Map** (Карту Расстояний).
+Instead of a standard binary mask (1 = pore, 0 = background), we generate a **Distance Map**.
 
-*   **Что это:** Значение каждого пикселя равно расстоянию до ближайшей границы поры. Центр поры — самый яркий (пик).
-*   **Зачем:**
-    1.  **Разделение слипшихся пор:** На обычной маске две слипшиеся поры — это одно пятно. На карте расстояний это **два разных пика**.
-    2.  **Обучение:** Нейросети проще предсказывать плавный градиент значений, чем резкие границы.
+* **What it is:** Each pixel value represents the distance to the nearest pore boundary. The pore center is the brightest (peak).
+* **Why it’s useful:**
+
+  1. **Separating merged pores:** In a binary mask, merged pores appear as one blob. In a distance map, they form **two distinct peaks**.
+  2. **Training stability:** Neural networks learn smooth gradients more easily than sharp edges.
 
 ![Distance Map Example](docs/images/distance_map_example.png)
 
 ---
 
-## 3. Аугментация данных (Размножение)
+## 3. Data Augmentation
 
-Размечать тысячи фото вручную долго. Мы берем небольшой набор (например, 6-10 фото) и "размножаем" его.
+Manually annotating thousands of images is time-consuming. We take a small dataset (e.g., 6–10 images) and “multiply” it.
 
-**Скрипт:** `scripts/augment_data.py`
+**Script:** `scripts/augment_data.py`
 
-**Методы:**
-1.  **Геометрия:** Повороты (90°, 180°, 270°), Отражения (по горизонтали/вертикали).
-2.  **Интенсивность:** Изменение яркости, контраста, добавление шума, размытие, гамма-коррекция.
+**Methods:**
 
-**Результат:** Из 6 фото мы получаем **384 вариации** для обучения.
+1. **Geometry:** Rotations (90°, 180°, 270°), horizontal/vertical flips.
+2. **Intensity:** Brightness and contrast adjustments, noise addition, blur, gamma correction.
 
-**Запуск:**
+**Result:** From 6 images, we obtain **384 training variations**.
+
+**Run:**
+
 ```bash
 python scripts/augment_data.py
 ```
 
 ---
 
-## 4. Обучение Нейросети
+## 4. Neural Network Training
 
-Мы используем архитектуру **UNet**, адаптированную для регрессии.
+We use a **UNet** architecture adapted for regression.
 
-*   **Вход:** Черно-белое изображение (1 канал).
-*   **Выход:** Distance Map (1 канал).
-*   **Функция потерь:** MSE (Mean Squared Error).
+* **Input:** Grayscale image (1 channel).
+* **Output:** Distance Map (1 channel).
+* **Loss function:** MSE (Mean Squared Error).
 
-**Запуск обучения:**
+**Start training:**
+
 ```bash
 python models/regression/train.py
 ```
 
-**Результаты обучения (пример):**
+**Training results (example):**
+
 ```text
 Epoch 50: Train Loss=0.0089, Val Loss=0.0105
 ```
-Низкое значение Loss (ошибка ~0.01) говорит о высокой точности модели.
+
+A low loss value (~0.01) indicates high model accuracy.
 
 ---
 
-## 5. Результаты работы
+## 5. Results
 
-После обучения модель может предсказывать поры на новых изображениях.
+After training, the model can predict pores on new images.
 
-**Запуск теста:**
+**Run inference:**
+
 ```bash
 python models/regression/inference.py --input "path/to/image.png"
 ```
 
-**Пример работы:**
+**Example output:**
 ![Inference Result](docs/images/inference_result.png)
 
-Слева — входное фото. В центре — предсказанная карта расстояний (тепловая карта). Справа — найденные поры (зеленые круги).
-
----
-
-**Работу выполнил Ищенко Никита Николаевич магистр 2 курса ФИТУ ЮРГПУ(НПИ)**
+Left — input image.
+Center — predicted distance map (heatmap).
+Right — detected pores (green circles).
