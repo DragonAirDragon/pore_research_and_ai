@@ -13,8 +13,8 @@ class DatasetPreparer:
     
     def __init__(
         self,
-        clean_dir: str = "./output/clean_background",
-        noisy_dir: str = "./output/noisy_background",
+        clean_dir: str = "./artifacts/generated/synthetic/clean_background",
+        noisy_dir: str = "./artifacts/generated/synthetic/noisy_background",
         output_dir: str = "./dataset",
         train_ratio: float = 0.7,
         val_ratio: float = 0.15,
@@ -191,8 +191,8 @@ class DatasetPreparer:
 def main():
     """Основная функция."""
     preparer = DatasetPreparer(
-        clean_dir="./output/clean_background",
-        noisy_dir="./output/noisy_background",
+        clean_dir="./artifacts/generated/synthetic/clean_background",
+        noisy_dir="./artifacts/generated/synthetic/noisy_background",
         output_dir="./dataset",
         train_ratio=0.7,
         val_ratio=0.15,

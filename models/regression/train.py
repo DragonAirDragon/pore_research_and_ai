@@ -1,172 +1,293 @@
-"""Training script for Regression UNet (Distance Map Prediction)."""
+"""Training script for Regression UNet (distance map prediction)."""
 
-import os
+from __future__ import annotations
+
+import argparse
 import json
+import sys
+from pathlib import Path
+
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
 from torch.amp import GradScaler, autocast
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-from pathlib import Path
-import matplotlib.pyplot as plt
-import sys
 
-# Добавляем корневую директорию в PYTHONPATH
+
 ROOT_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-# Import model
 from models.regression.model import RegressionUNet
 
-class AugmentedDataset(Dataset):
-    def __init__(self, file_list, root_dir):
-        self.files = file_list
-        self.root_dir = Path(root_dir)
-        
-    def __len__(self):
-        return len(self.files)
-    
-    def __getitem__(self, idx):
-        # file_info is just the filename of the distance map, e.g. "1_rot0_dist.png"
-        dist_name = self.files[idx]
-        # Image name is dist_name without "_dist.png" + ".png"
-        img_name = dist_name.replace("_dist.png", ".png")
-        
-        img_path = self.root_dir / img_name
-        dist_path = self.root_dir / dist_name
-        
-        # Load images
-        # Input image is grayscale
-        image = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
-        dist = cv2.imread(str(dist_path), cv2.IMREAD_GRAYSCALE)
-        
-        if image is None:
-            raise ValueError(f"Could not load image: {img_path}")
-        if dist is None:
-            raise ValueError(f"Could not load dist: {dist_path}")
-        
-        # Normalize
-        image = image.astype(np.float32) / 255.0
-        dist = dist.astype(np.float32)
-        
-        # To Tensor
-        image = torch.from_numpy(image).unsqueeze(0) # (1, H, W)
-        dist = torch.from_numpy(dist).unsqueeze(0)   # (1, H, W)
-        
-        return image, dist
 
-def train():
-    # Config
-    # Use absolute path or relative to script? Let's use absolute for safety based on user input
-    DATASET_DIR = Path(r"d:\pore_research_and_ai\RealPoresImages\dataset_augmented")
-    CHECKPOINT_DIR = Path(r"d:\pore_research_and_ai\models\regression\checkpoints_augmented")
-    BATCH_SIZE = 8 # Smaller batch size for safety
-    NUM_EPOCHS = 50
-    LR = 1e-3
-    
+def get_device() -> torch.device:
     if torch.cuda.is_available():
-        DEVICE = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        DEVICE = torch.device("mps")
-    else:
-        DEVICE = torch.device("cpu")
-    
-    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # Data Preparation
-    print(f"Scanning {DATASET_DIR}...")
-    all_dist_files = [f.name for f in DATASET_DIR.glob("*_dist.png")]
-    
-    if not all_dist_files:
-        print("No data found! Check the path.")
-        return
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
 
-    # Shuffle and Split
-    np.random.shuffle(all_dist_files)
-    split_idx = int(len(all_dist_files) * 0.8)
-    train_files = all_dist_files[:split_idx]
-    val_files = all_dist_files[split_idx:]
-    
-    print(f"Found {len(all_dist_files)} images. Train: {len(train_files)}, Val: {len(val_files)}")
-    
-    train_ds = AugmentedDataset(train_files, DATASET_DIR)
-    val_ds = AugmentedDataset(val_files, DATASET_DIR)
-    
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False)
-    
-    # Model
-    model = RegressionUNet().to(DEVICE)
-    
-    # Loss: MSE for regression
+
+class RegressionDataset(Dataset):
+    """Dataset for distance-map regression from either metadata or annotator-style folders."""
+
+    def __init__(self, samples: list[tuple[Path, Path]]):
+        self.samples = samples
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        image_path, distance_path = self.samples[idx]
+        image = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
+        distance = cv2.imread(str(distance_path), cv2.IMREAD_GRAYSCALE)
+
+        if image is None:
+            raise FileNotFoundError(f"Could not load image: {image_path}")
+        if distance is None:
+            raise FileNotFoundError(f"Could not load distance map: {distance_path}")
+
+        image_tensor = torch.from_numpy(image.astype(np.float32) / 255.0).unsqueeze(0)
+        distance_tensor = torch.from_numpy(distance.astype(np.float32)).unsqueeze(0)
+        return image_tensor, distance_tensor
+
+
+def load_samples_from_metadata(dataset_dir: Path, split: str) -> list[tuple[Path, Path]]:
+    metadata_path = dataset_dir / "metadata.json"
+    with open(metadata_path, "r", encoding="utf-8") as metadata_file:
+        metadata = json.load(metadata_file)
+
+    split_files = metadata.get("files", {}).get(split, [])
+    samples: list[tuple[Path, Path]] = []
+    for item in split_files:
+        image_name = item.get("noisy") or item.get("original")
+        distance_name = item.get("distance") or item.get("distance_map")
+
+        if not image_name or not distance_name:
+            continue
+
+        noisy_dir = dataset_dir / split / "noisy"
+        if noisy_dir.exists():
+            image_path = noisy_dir / image_name
+            distance_path = dataset_dir / split / "distance" / distance_name
+        else:
+            sample_id = item["id"]
+            image_path = dataset_dir / split / sample_id / image_name
+            distance_path = dataset_dir / split / sample_id / distance_name
+        samples.append((image_path, distance_path))
+
+    return samples
+
+
+def load_samples_from_annotator_split(dataset_dir: Path, split: str) -> list[tuple[Path, Path]]:
+    split_dir = dataset_dir / split
+    samples: list[tuple[Path, Path]] = []
+    if not split_dir.exists():
+        return samples
+
+    for sample_dir in sorted(path for path in split_dir.iterdir() if path.is_dir()):
+        image_path = sample_dir / "original.png"
+        distance_path = sample_dir / "distance_map.png"
+        if image_path.exists() and distance_path.exists():
+            samples.append((image_path, distance_path))
+
+    return samples
+
+
+def load_split_samples(dataset_dir: Path, split: str) -> list[tuple[Path, Path]]:
+    metadata_path = dataset_dir / "metadata.json"
+    if metadata_path.exists():
+        samples = load_samples_from_metadata(dataset_dir, split)
+        if samples:
+            return samples
+
+    samples = load_samples_from_annotator_split(dataset_dir, split)
+    if samples:
+        return samples
+
+    raise RuntimeError(f"Could not resolve split '{split}' in dataset {dataset_dir}")
+
+
+def load_checkpoint_state_dict(checkpoint_path: Path, device: torch.device) -> dict[str, torch.Tensor]:
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        return checkpoint["model_state_dict"]
+    return checkpoint
+
+
+def evaluate_model(model: nn.Module, loader: DataLoader | None, criterion: nn.Module, device: torch.device) -> float:
+    if loader is None:
+        return float("nan")
+
+    model.eval()
+    losses = []
+    with torch.no_grad():
+        for images, distances in loader:
+            images = images.to(device)
+            distances = distances.to(device)
+            predictions = model(images)
+            loss = criterion(predictions, distances)
+            losses.append(loss.item())
+
+    if not losses:
+        return float("nan")
+    return float(np.mean(losses))
+
+
+def plot_history(history: dict[str, list[float]], output_dir: Path) -> None:
+    plt.figure(figsize=(8, 5))
+    plt.plot(history["train_loss"], label="train")
+    plt.plot(history["val_loss"], label="val")
+    if history.get("test_loss") and any(not np.isnan(value) for value in history["test_loss"]):
+        plt.plot(history["test_loss"], label="test")
+    plt.xlabel("Epoch")
+    plt.ylabel("MSE loss")
+    plt.title("Regression training history")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(output_dir / "training_history.png", dpi=150)
+    plt.close()
+
+
+def train(args: argparse.Namespace) -> None:
+    dataset_dir = Path(args.dataset)
+    checkpoint_dir = Path(args.checkpoint_dir)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    train_samples = load_split_samples(dataset_dir, "train")
+    val_samples = load_split_samples(dataset_dir, "val")
+    test_samples = load_split_samples(dataset_dir, "test") if (dataset_dir / "test").exists() else []
+
+    print(f"Dataset: {dataset_dir}")
+    print(f"Train samples: {len(train_samples)}")
+    print(f"Val samples: {len(val_samples)}")
+    print(f"Test samples: {len(test_samples)}")
+
+    pin_memory = args.pin_memory and get_device().type == "cuda"
+    train_loader = DataLoader(
+        RegressionDataset(train_samples),
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=pin_memory,
+    )
+    val_loader = DataLoader(
+        RegressionDataset(val_samples),
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=pin_memory,
+    )
+    test_loader = None
+    if test_samples:
+        test_loader = DataLoader(
+            RegressionDataset(test_samples),
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=args.num_workers,
+            pin_memory=pin_memory,
+        )
+
+    device = get_device()
+    model = RegressionUNet().to(device)
+    if args.init_model:
+        init_model_path = Path(args.init_model)
+        model.load_state_dict(load_checkpoint_state_dict(init_model_path, device))
+        print(f"Initialized model from {init_model_path}")
     criterion = nn.MSELoss()
-    optimizer = optim.AdamW(model.parameters(), lr=LR)
-    
-    scaler = GradScaler('cuda') if DEVICE.type == 'cuda' else None
-    
-    best_val_loss = float('inf')
-    history = {"train_loss": [], "val_loss": []}
-    
-    print(f"Starting training on {DEVICE}...")
-    
-    for epoch in range(1, NUM_EPOCHS + 1):
+    optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    scaler = GradScaler("cuda") if device.type == "cuda" and args.use_amp else None
+
+    history: dict[str, list[float]] = {"train_loss": [], "val_loss": [], "test_loss": []}
+    best_val_loss = float("inf")
+
+    for epoch in range(1, args.epochs + 1):
         model.train()
-        train_loss = 0
-        
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{NUM_EPOCHS}")
-        for noisy, dist in pbar:
-            noisy, dist = noisy.to(DEVICE), dist.to(DEVICE)
-            
+        batch_losses = []
+        progress = tqdm(train_loader, desc=f"Epoch {epoch}/{args.epochs}")
+
+        for images, distances in progress:
+            images = images.to(device)
+            distances = distances.to(device)
+
             optimizer.zero_grad()
-            
-            if scaler:
-                with autocast('cuda'):
-                    pred = model(noisy)
-                    loss = criterion(pred, dist)
+            if scaler is not None:
+                with autocast("cuda"):
+                    predictions = model(images)
+                    loss = criterion(predictions, distances)
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                pred = model(noisy)
-                loss = criterion(pred, dist)
+                predictions = model(images)
+                loss = criterion(predictions, distances)
                 loss.backward()
                 optimizer.step()
-                
-            train_loss += loss.item()
-            pbar.set_postfix(loss=loss.item())
-            
-        avg_train_loss = train_loss / len(train_loader)
-        history["train_loss"].append(avg_train_loss)
-        
-        # Validation
-        model.eval()
-        val_loss = 0
-        with torch.no_grad():
-            for noisy, dist in val_loader:
-                noisy, dist = noisy.to(DEVICE), dist.to(DEVICE)
-                pred = model(noisy)
-                loss = criterion(pred, dist)
-                val_loss += loss.item()
-                
-        avg_val_loss = val_loss / len(val_loader)
-        history["val_loss"].append(avg_val_loss)
-        
-        print(f"Epoch {epoch}: Train Loss={avg_train_loss:.4f}, Val Loss={avg_val_loss:.4f}")
-        
-        # Save Best
-        if avg_val_loss < best_val_loss:
-            best_val_loss = avg_val_loss
-            torch.save(model.state_dict(), CHECKPOINT_DIR / "best_model.pth")
-            print("✅ Saved best model")
-            
-    print("Training Complete.")
-    
-    # Save history
-    with open(CHECKPOINT_DIR / "history.json", "w") as f:
-        json.dump(history, f)
+
+            batch_losses.append(loss.item())
+            progress.set_postfix(train_loss=loss.item())
+
+        train_loss = float(np.mean(batch_losses)) if batch_losses else float("nan")
+        val_loss = evaluate_model(model, val_loader, criterion, device)
+        test_loss = evaluate_model(model, test_loader, criterion, device)
+
+        history["train_loss"].append(train_loss)
+        history["val_loss"].append(val_loss)
+        history["test_loss"].append(test_loss)
+
+        if np.isnan(test_loss):
+            print(f"Epoch {epoch}: train={train_loss:.4f}, val={val_loss:.4f}")
+        else:
+            print(f"Epoch {epoch}: train={train_loss:.4f}, val={val_loss:.4f}, test={test_loss:.4f}")
+
+        checkpoint = {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "train_loss": train_loss,
+            "val_loss": val_loss,
+            "test_loss": test_loss,
+            "history": history,
+            "dataset": str(dataset_dir),
+        }
+        torch.save(checkpoint, checkpoint_dir / "last_model.pth")
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(checkpoint, checkpoint_dir / "best_model.pth")
+            print("Saved new best model")
+
+    with open(checkpoint_dir / "history.json", "w", encoding="utf-8") as history_file:
+        json.dump(history, history_file, indent=2)
+
+    plot_history(history, checkpoint_dir)
+    print(f"Training complete. Best val loss: {best_val_loss:.4f}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Train the regression UNet on split datasets")
+    parser.add_argument("--dataset", type=str, default="dataset_regression", help="Path to dataset root")
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        default="artifacts/checkpoints/regression/synthetic",
+        help="Directory to save checkpoints",
+    )
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument("--weight-decay", type=float, default=1e-5)
+    parser.add_argument("--init-model", type=str, default=None, help="Optional checkpoint to warm-start from")
+    parser.add_argument("--num-workers", type=int, default=0)
+    parser.add_argument("--pin-memory", action="store_true")
+    parser.add_argument("--use-amp", action="store_true")
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
-    train()
+    train(parse_args())

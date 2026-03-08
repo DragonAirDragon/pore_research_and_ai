@@ -11,7 +11,7 @@ ROOT_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from src.pore_generator import PoreGenerator
-from scripts.analyze_mask import analyze_pore_mask
+from scripts.evaluation.analyze_mask import analyze_pore_mask
 
 class InstrumentedPoreGenerator(PoreGenerator):
     """

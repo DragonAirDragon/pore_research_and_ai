@@ -11,7 +11,7 @@ import sys
 ROOT_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from scripts.generate_images import PoreImageGenerator
+from scripts.data_prep.generate_images import PoreImageGenerator
 
 def generate_distance_dataset(output_dir="dataset_regression", num_train=500, num_val=100):
     """Generates dataset with Distance Maps as targets."""

@@ -41,7 +41,7 @@ def predict_image(model, image_path: str, device: torch.device):
     
     # Предсказание
     with torch.no_grad():
-        pred = model(img_tensor)
+        pred = torch.sigmoid(model(img_tensor))
     
     # Конвертируем обратно
     pred_mask = pred.squeeze().cpu().numpy()
@@ -87,7 +87,7 @@ def evaluate_test_set(model, dataset_dir: str, device: torch.device, num_samples
     """Оценка на тестовом наборе."""
     test_dataset = PoreDataset(dataset_dir, split="test", augment=False)
     
-    output_dir = Path("./results")
+    output_dir = Path("./artifacts/evaluations/segmentation_test")
     output_dir.mkdir(exist_ok=True)
     
     print(f"\n{'='*70}")
@@ -106,7 +106,7 @@ def evaluate_test_set(model, dataset_dir: str, device: torch.device, num_samples
         
         # Предсказание
         with torch.no_grad():
-            pred = model(noisy_tensor)
+            pred = torch.sigmoid(model(noisy_tensor))
         
         # Вычисляем метрики
         metrics = calculate_metrics(pred, gt_tensor)
@@ -158,7 +158,7 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="./checkpoints/best_model.pth",
+        default="./artifacts/checkpoints/segmentation/best_model.pth",
         help="Путь к чекпоинту модели"
     )
     parser.add_argument(

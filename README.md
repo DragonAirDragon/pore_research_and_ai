@@ -1,176 +1,314 @@
-Here is the **English translation**:
+# Pore Analysis AI
 
----
+Проект для поиска и измерения пор на SEM-изображениях керамики.
 
-# Pore Analysis AI: Complete Guide
+Основной рабочий путь в репозитории сейчас такой:
 
-This project is designed for automatic detection and analysis of pores in ceramic SEM images using deep learning (Regression UNet).
+- ручная разметка реальных изображений,
+- подготовка корректного `train/val/test`,
+- дообучение regression-модели,
+- оценка на отложенном реальном тесте.
 
----
+В репозитории есть две ветки моделей:
 
-## 0. Installation and Setup
+- `segmentation`: предсказывает бинарную маску пор;
+- `regression`: предсказывает distance map, по которому потом восстанавливаются центры и радиусы пор.
 
-Before starting, you need to prepare the environment.
+Рекомендуемый вариант для практической работы здесь: `regression`.
 
-1. **Create a virtual environment:**
+## Структура проекта
 
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate
-   ```
+Что где лежит:
 
-2. **Install dependencies:**
+- `tools/annotator/` — GUI-инструмент для ручной разметки.
+- `scripts/data_prep/` — подготовка и генерация датасетов.
+- `scripts/evaluation/` — оценка модели и анализ результатов.
+- `models/regression/` — regression-модель, обучение и inference.
+- `models/segmentation/` — segmentation-модель.
+- `run/` — готовые команды по шагам, в правильном порядке.
+- `RealPoresImages/` — реальные SEM-изображения и ручная разметка.
+- `dataset_manual_prepared/` — подготовленный real dataset со split-ами.
+- `artifacts/checkpoints/` — все обученные модели и checkpoint-файлы.
+- `artifacts/evaluations/` — отчеты оценки и визуализации.
+- `artifacts/generated/` — сгенерированные synthetic изображения.
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+Если смотреть только на порядок запуска, то ориентироваться нужно прежде всего на папку `run/`.
 
-   *For GPU support (NVIDIA), make sure PyTorch with CUDA is installed.*
+## Быстрый порядок запуска
 
-3. **Download the dataset:**
-   For a quick start, you can download a ready-made dataset:
-   [Google Drive Link](https://drive.google.com/file/d/1D3RilH6dyAzNCyiDUmFHEfnJkgg7rz6o/view?usp=sharing)
+Самый понятный порядок такой:
 
----
+1. Разметить реальные изображения.
+2. Собрать `train/val/test`.
+3. При необходимости обучить модель на synthetic данных.
+4. Дообучить модель на реальных данных.
+5. Проверить качество на `val`.
+6. Проверить итоговое качество на `test`.
+7. Проверить устойчивость на `test_robust`.
 
-## 1. Annotation Rules and Tools
+Готовые команды лежат в:
 
-High-quality annotations are required to train the neural network. We use a dedicated manual annotation tool.
+- `run/01_prepare_real_dataset.sh`
+- `run/02_train_regression_on_synthetic.sh`
+- `run/03_finetune_regression_on_real.sh`
+- `run/04_validate_regression.sh`
+- `run/05_test_regression.sh`
+- `run/06_test_regression_robust.sh`
+- `run/run_all_real_pipeline.sh`
 
-### How to identify a pore?
+Запускать их можно так:
 
-* **Contrast:** Pores are usually darker than the background.
-* **Shape:** Rounded or irregular shapes with visible “depth.”
-* **Ignore:** Scratches, surface shadows, shallow textures.
+```bash
+bash run/01_prepare_real_dataset.sh
+```
 
-![Manual Annotation Guide](docs/images/manual_annotation_guide.png)
+## Установка
 
-### The “Neck Rule”
+Создать и активировать окружение:
 
-How to distinguish one merged pore from two separate pores?
+```bash
+python -m venv venv
+source venv/bin/activate
+```
 
-* **Single pore:** Oval or bean-like shape without narrowing.
-* **Two pores:** A visible “neck” (constriction) between centers. Annotate them as two overlapping circles.
+Установить зависимости:
 
-![Merged Pore Annotation Guide](docs/images/merged_pore_guide.png)
+```bash
+pip install -r requirements.txt
+```
 
-### Annotation Tool (Annotator Tool)
+Если используется NVIDIA GPU, нужен PyTorch с CUDA.
 
-We developed a convenient GUI tool for annotation.
+## Шаг 1. Ручная разметка
 
-**Launch:**
+Запуск аннотатора:
 
 ```bash
 python tools/annotator/main.py
 ```
 
-**Interface:**
-![Annotator UI](docs/images/ToolUI.png)
-
-**Features:**
-
-* **Drawing:** Left mouse button (drag to set radius).
-* **Navigation:** Middle mouse button (or Space + LMB) to pan, scroll wheel to zoom.
-* **Eyedropper (P):** Click on a pore to view a threshold-based mask (helps separate the pore from the background).
-* **Split View:** List on the left, original image in the center, effect preview on the right.
-* **Save (S):** Saves the original image, mask, and distance map.
-
-> [!CAUTION]
-> **Save your progress!**
->
-> Before switching to the next image, always press **Save (S)**.
-> Otherwise, the current annotation **will not be saved** and will be lost.
-
-> [!IMPORTANT]
-> **Human Factor and Expert Validation**
->
-> The neural network’s performance directly depends on annotation quality. Human errors become model errors.
->
-> * **Expert review:** It is strongly recommended that annotations be performed or reviewed by a domain expert (chemist/materials scientist) who understands the material structure.
-> * **Active Learning:** To achieve optimal results, use an iterative approach:
->
->   1. Annotate 10–20 images.
->   2. Train the model.
->   3. Use the model to pre-annotate new data.
->   4. An expert corrects the model’s mistakes.
->   5. Retrain the model.
->
->   This “annotate → train → review” cycle every 10 images significantly speeds up the process and improves accuracy.
-
----
-
-## 2. Distance Map Concept
-
-Instead of a standard binary mask (1 = pore, 0 = background), we generate a **Distance Map**.
-
-* **What it is:** Each pixel value represents the distance to the nearest pore boundary. The pore center is the brightest (peak).
-* **Why it’s useful:**
-
-  1. **Separating merged pores:** In a binary mask, merged pores appear as one blob. In a distance map, they form **two distinct peaks**.
-  2. **Training stability:** Neural networks learn smooth gradients more easily than sharp edges.
-
-![Distance Map Example](docs/images/distance_map_example.png)
-
----
-
-## 3. Data Augmentation
-
-Manually annotating thousands of images is time-consuming. We take a small dataset (e.g., 6–10 images) and “multiply” it.
-
-**Script:** `scripts/augment_data.py`
-
-**Methods:**
-
-1. **Geometry:** Rotations (90°, 180°, 270°), horizontal/vertical flips.
-2. **Intensity:** Brightness and contrast adjustments, noise addition, blur, gamma correction.
-
-**Result:** From 6 images, we obtain **384 training variations**.
-
-**Run:**
-
-```bash
-python scripts/augment_data.py
-```
-
----
-
-## 4. Neural Network Training
-
-We use a **UNet** architecture adapted for regression.
-
-* **Input:** Grayscale image (1 channel).
-* **Output:** Distance Map (1 channel).
-* **Loss function:** MSE (Mean Squared Error).
-
-**Start training:**
-
-```bash
-python models/regression/train.py
-```
-
-**Training results (example):**
+Каждое размеченное изображение сохраняется так:
 
 ```text
-Epoch 50: Train Loss=0.0089, Val Loss=0.0105
+RealPoresImages/dataset_manual/<sample_id>/
+  original.png
+  mask.png
+  distance_map.png
 ```
 
-A low loss value (~0.01) indicates high model accuracy.
+Что это значит:
 
----
+- `original.png` — исходное изображение;
+- `mask.png` — бинарная маска пор;
+- `distance_map.png` — карта расстояний для regression-модели.
 
-## 5. Results
+Соглашение по маске:
 
-After training, the model can predict pores on new images.
+- поры — белые (`255`),
+- фон — черный (`0`).
 
-**Run inference:**
+## Шаг 2. Подготовка real dataset
+
+Главное правило: сначала делим исходные размеченные изображения на `train/val/test`, и только потом делаем аугментации для `train`.
+
+Запуск:
 
 ```bash
-python models/regression/inference.py --input "path/to/image.png"
+python scripts/data_prep/prepare_manual_dataset.py \
+  --input RealPoresImages/dataset_manual \
+  --output dataset_manual_prepared \
+  --train-ratio 0.67 \
+  --val-ratio 0.16 \
+  --test-ratio 0.17 \
+  --with-test-robustness
 ```
 
-**Example output:**
-![Inference Result](docs/images/inference_result.png)
+Результат:
 
-Left — input image.
-Center — predicted distance map (heatmap).
-Right — detected pores (green circles).
+```text
+dataset_manual_prepared/
+  metadata.json
+  train/
+  val/
+  test/
+  test_robust/
+```
+
+Смысл папок:
+
+- `train/` — только тренировочные изображения и их аугментации;
+- `val/` — отдельные изображения для подбора threshold;
+- `test/` — отдельные изображения для итоговой проверки;
+- `test_robust/` — искаженные версии тестовых изображений для stress-test.
+
+## Шаг 3. Synthetic данные
+
+Если нужен synthetic pretraining:
+
+```bash
+python scripts/data_prep/generate_dataset.py --total 5000 --batch-size 100
+python prepare_dataset.py
+```
+
+Для regression distance maps:
+
+```bash
+python models/regression/generate_distance_dataset.py
+```
+
+Это создает `dataset_regression/`.
+
+## Шаг 4. Обучение regression-модели
+
+Обучение на synthetic данных:
+
+```bash
+python models/regression/train.py \
+  --dataset dataset_regression \
+  --checkpoint-dir artifacts/checkpoints/regression/synthetic \
+  --epochs 50 \
+  --batch-size 8
+```
+
+Дообучение на реальных данных от уже обученного synthetic checkpoint:
+
+```bash
+python models/regression/train.py \
+  --dataset dataset_manual_prepared \
+  --checkpoint-dir artifacts/checkpoints/regression/real_finetuned \
+  --init-model artifacts/checkpoints/regression/synthetic/best_model.pth \
+  --epochs 25 \
+  --batch-size 4 \
+  --learning-rate 1e-4
+```
+
+Что делает trainer:
+
+- читает `train`, `val` и при наличии `test`;
+- сохраняет `best_model.pth` и `last_model.pth`;
+- пишет `history.json` и `training_history.png`.
+
+## Шаг 5. Оценка качества
+
+Оценивать модель нужно так:
+
+1. на `val` выбрать threshold;
+2. тот же threshold зафиксировать;
+3. только после этого считать итоговую точность на `test`.
+
+Валидация:
+
+```bash
+python scripts/evaluation/evaluate_real_dataset.py \
+  --task regression \
+  --model artifacts/checkpoints/regression/real_finetuned/best_model.pth \
+  --dataset dataset_manual_prepared/val \
+  --output artifacts/evaluations/regression/manual_val_finetuned \
+  --thresholds 0.5,1,2,3,4
+```
+
+Финальный тест:
+
+```bash
+python scripts/evaluation/evaluate_real_dataset.py \
+  --task regression \
+  --model artifacts/checkpoints/regression/real_finetuned/best_model.pth \
+  --dataset dataset_manual_prepared/test \
+  --output artifacts/evaluations/regression/manual_test_finetuned \
+  --fixed-threshold 0.5 \
+  --thresholds 0.5,1,2,3,4
+```
+
+Проверка устойчивости:
+
+```bash
+python scripts/evaluation/evaluate_real_dataset.py \
+  --task regression \
+  --model artifacts/checkpoints/regression/real_finetuned/best_model.pth \
+  --dataset dataset_manual_prepared/test_robust \
+  --output artifacts/evaluations/regression/manual_test_robust_finetuned \
+  --fixed-threshold 0.5 \
+  --thresholds 0.5,1,2,3,4
+```
+
+Что считает evaluator:
+
+- `Dice` и `IoU` по маске;
+- ошибку по пористости;
+- `precision / recall / F1` по отдельным порам;
+- ошибку по количеству пор;
+- ошибку по центрам и радиусам.
+
+## Итоговая точность текущей модели
+
+Текущая финальная модель:
+
+- checkpoint: `artifacts/checkpoints/regression/real_finetuned/best_model.pth`
+- стартовала от synthetic pretrained checkpoint;
+- дообучалась на 4 размеченных реальных изображениях;
+- threshold фиксировался по `val` и потом использовался на `test`.
+
+Как определялась итоговая точность простым языком:
+
+- сначала модель обучили на synthetic данных;
+- потом дообучили на нескольких реальных размеченных изображениях;
+- одно реальное изображение отложили под `val` и использовали только для выбора threshold;
+- другое реальное изображение полностью отложили под финальный `test` и не использовали в обучении;
+- дополнительно взяли 8 искаженных версий этого же тестового изображения и проверили устойчивость модели.
+
+Итог на реальном `test`:
+
+- `Dice = 0.9709`
+- `IoU = 0.9435`
+- предсказанная пористость: `6.31%`
+- истинная пористость: `6.54%`
+- ошибка по пористости: `0.24` процентного пункта
+- найдено пор: `36`
+- истинно пор: `57`
+- `pore recall = 0.6316`
+- `pore precision = 1.0000`
+- `pore F1 = 0.7742`
+- `radius MAE = 0.1509 px`
+
+Итог на `test_robust`:
+
+- средний `Dice = 0.9658`
+- средний `IoU = 0.9339`
+- средняя ошибка по пористости: `0.28` процентного пункта
+- в среднем найдено пор: `35`
+- истинно пор: `57`
+- средний `pore recall = 0.6140`
+- средний `pore precision = 1.0000`
+- средний `pore F1 = 0.7607`
+
+Что это означает нормальным языком:
+
+- модель очень хорошо восстанавливает общую площадь пор;
+- оценка общей пористости уже близка к ручной разметке;
+- лишние поры модель почти не придумывает;
+- главный текущий недостаток — недосчет отдельных пор, когда они расположены плотно или плохо разделяются.
+
+Важно: эти цифры пока предварительные, потому что реальный тестовый набор еще маленький.
+
+## Segmentation ветка
+
+Она остается в репозитории, но основной рабочий путь сейчас не через нее:
+
+```bash
+python models/segmentation/train.py
+python models/segmentation/inference.py --model checkpoints/best_model.pth --dataset dataset
+```
+
+## Проверка
+
+Unit-тесты:
+
+```bash
+pytest
+```
+
+Интеграционный тест запускается отдельно:
+
+```bash
+python tests/test_integration.py
+```

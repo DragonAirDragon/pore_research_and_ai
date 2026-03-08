@@ -15,6 +15,13 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from models.regression.model import RegressionUNet
 
+
+def load_regression_checkpoint(model_path, device):
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        return checkpoint["model_state_dict"]
+    return checkpoint
+
 def predict_pores(image_path, model_path, output_path=None, threshold=2.0):
     """Predicts pores using the regression model."""
     
@@ -28,8 +35,8 @@ def predict_pores(image_path, model_path, output_path=None, threshold=2.0):
     
     print(f"Using device: {device}")
     model = RegressionUNet().to(device)
-    
-    checkpoint = torch.load(model_path, map_location=device)
+
+    checkpoint = load_regression_checkpoint(model_path, device)
     model.load_state_dict(checkpoint)
     model.eval()
     
@@ -119,7 +126,7 @@ def predict_pores(image_path, model_path, output_path=None, threshold=2.0):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, required=True, help="Input image path")
-    parser.add_argument("--model", type=str, default="checkpoints_regression/best_model.pth", help="Path to model checkpoint")
+    parser.add_argument("--model", type=str, default="artifacts/checkpoints/regression/synthetic/best_model.pth", help="Path to model checkpoint")
     parser.add_argument("--output", type=str, default="inference_result.png", help="Output visualization path")
     parser.add_argument("--threshold", type=float, default=2.0, help="Minimum radius threshold")
     

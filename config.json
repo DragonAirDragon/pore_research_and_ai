@@ -60,7 +60,7 @@
     }
   },
   "output_settings": {
-    "clean_dir": "./output/clean_background",
-    "noisy_dir": "./output/noisy_background"
+    "clean_dir": "./artifacts/generated/synthetic/clean_background",
+    "noisy_dir": "./artifacts/generated/synthetic/noisy_background"
   }
 }

@@ -307,7 +307,7 @@ class Trainer:
         criterion: nn.Module,
         optimizer: optim.Optimizer,
         device: torch.device,
-        checkpoint_dir: str = "./checkpoints",
+        checkpoint_dir: str = "./artifacts/checkpoints/segmentation",
         use_amp: bool = True,
     ):
         self.model = model.to(device)
@@ -529,7 +529,7 @@ def main():
         criterion=criterion,
         optimizer=optimizer,
         device=DEVICE,
-        checkpoint_dir="./checkpoints",
+        checkpoint_dir="./artifacts/checkpoints/segmentation",
         use_amp=True  # Mixed precision для ускорения
     )
     

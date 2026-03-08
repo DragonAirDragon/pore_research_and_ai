@@ -1,6 +1,10 @@
 # Data directories
 data/
 outputs/
+artifacts/evaluations/
+artifacts/generated/
+integration_results/
+overlapping_results/
 dataset*/
 output/
 *.png
@@ -11,10 +15,11 @@ output/
 
 # Model checkpoints
 *.pth
-!models/regression/checkpoints_augmented/best_model.pth
+!artifacts/checkpoints/regression/synthetic/best_model.pth
 *.pt
 checkpoints*/
-!models/regression/checkpoints_augmented/
+!artifacts/checkpoints/regression/
+!artifacts/checkpoints/regression/synthetic/
 
 # Python
 __pycache__/
