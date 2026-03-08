@@ -271,11 +271,11 @@ def train(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the regression UNet on split datasets")
-    parser.add_argument("--dataset", type=str, default="dataset_regression", help="Path to dataset root")
+    parser.add_argument("--dataset", type=str, default="dataset_manual_prepared", help="Path to dataset root")
     parser.add_argument(
         "--checkpoint-dir",
         type=str,
-        default="artifacts/checkpoints/regression/synthetic",
+        default="artifacts/checkpoints/regression/real",
         help="Directory to save checkpoints",
     )
     parser.add_argument("--batch-size", type=int, default=8)

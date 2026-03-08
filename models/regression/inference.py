@@ -126,7 +126,7 @@ def predict_pores(image_path, model_path, output_path=None, threshold=2.0):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, required=True, help="Input image path")
-    parser.add_argument("--model", type=str, default="artifacts/checkpoints/regression/synthetic/best_model.pth", help="Path to model checkpoint")
+    parser.add_argument("--model", type=str, default="artifacts/checkpoints/regression/real/best_model.pth", help="Path to model checkpoint")
     parser.add_argument("--output", type=str, default="inference_result.png", help="Output visualization path")
     parser.add_argument("--threshold", type=float, default=2.0, help="Minimum radius threshold")
     

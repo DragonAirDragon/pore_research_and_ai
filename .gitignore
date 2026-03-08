@@ -15,11 +15,9 @@ output/
 
 # Model checkpoints
 *.pth
-!artifacts/checkpoints/regression/synthetic/best_model.pth
 *.pt
 checkpoints*/
 !artifacts/checkpoints/regression/
-!artifacts/checkpoints/regression/synthetic/
 
 # Python
 __pycache__/

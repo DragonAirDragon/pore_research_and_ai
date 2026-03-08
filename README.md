@@ -21,7 +21,7 @@
 Что где лежит:
 
 - `tools/annotator/` — GUI-инструмент для ручной разметки.
-- `scripts/data_prep/` — подготовка и генерация датасетов.
+- `scripts/data_prep/` — подготовка real dataset и аугментации.
 - `scripts/evaluation/` — оценка модели и анализ результатов.
 - `models/regression/` — regression-модель, обучение и inference.
 - `models/segmentation/` — segmentation-модель.
@@ -30,7 +30,6 @@
 - `dataset_manual_prepared/` — подготовленный real dataset со split-ами.
 - `artifacts/checkpoints/` — все обученные модели и checkpoint-файлы.
 - `artifacts/evaluations/` — отчеты оценки и визуализации.
-- `artifacts/generated/` — сгенерированные изображения для дополнительных экспериментов.
 
 Если смотреть только на порядок запуска, то ориентироваться нужно прежде всего на папку `run/`.
 
@@ -53,8 +52,6 @@
 - `run/05_test_regression.sh`
 - `run/06_test_regression_robust.sh`
 - `run/run_all_real_pipeline.sh`
-
-Опционально в репозитории оставлен `run/02_train_regression_on_synthetic.sh`, но он не относится к текущему основному пайплайну и не использовался для итоговых метрик ниже.
 
 Запускать их можно так:
 
@@ -148,7 +145,7 @@ dataset_manual_prepared/
 ```bash
 python models/regression/train.py \
   --dataset dataset_manual_prepared \
-  --checkpoint-dir artifacts/checkpoints/regression/real_finetuned \
+  --checkpoint-dir artifacts/checkpoints/regression/real \
   --epochs 25 \
   --batch-size 4 \
   --learning-rate 1e-4
@@ -159,18 +156,6 @@ python models/regression/train.py \
 - читает `train`, `val` и при наличии `test`;
 - сохраняет `best_model.pth` и `last_model.pth`;
 - пишет `history.json` и `training_history.png`.
-
-## Опционально: synthetic эксперименты
-
-В репозитории остаются скрипты для synthetic генерации и отдельных экспериментов:
-
-```bash
-python scripts/data_prep/generate_dataset.py --total 5000 --batch-size 100
-python prepare_dataset.py
-python models/regression/generate_distance_dataset.py
-```
-
-Но текущая основная модель и приведенные ниже метрики на них не опираются.
 
 ## Шаг 4. Оценка качества
 
@@ -185,9 +170,9 @@ python models/regression/generate_distance_dataset.py
 ```bash
 python scripts/evaluation/evaluate_real_dataset.py \
   --task regression \
-  --model artifacts/checkpoints/regression/real_finetuned/best_model.pth \
+  --model artifacts/checkpoints/regression/real/best_model.pth \
   --dataset dataset_manual_prepared/val \
-  --output artifacts/evaluations/regression/manual_val_finetuned \
+  --output artifacts/evaluations/regression/manual_val_real \
   --thresholds 0.5,1,2,3,4
 ```
 
@@ -196,9 +181,9 @@ python scripts/evaluation/evaluate_real_dataset.py \
 ```bash
 python scripts/evaluation/evaluate_real_dataset.py \
   --task regression \
-  --model artifacts/checkpoints/regression/real_finetuned/best_model.pth \
+  --model artifacts/checkpoints/regression/real/best_model.pth \
   --dataset dataset_manual_prepared/test \
-  --output artifacts/evaluations/regression/manual_test_finetuned \
+  --output artifacts/evaluations/regression/manual_test_real \
   --fixed-threshold 0.5 \
   --thresholds 0.5,1,2,3,4
 ```
@@ -208,9 +193,9 @@ python scripts/evaluation/evaluate_real_dataset.py \
 ```bash
 python scripts/evaluation/evaluate_real_dataset.py \
   --task regression \
-  --model artifacts/checkpoints/regression/real_finetuned/best_model.pth \
+  --model artifacts/checkpoints/regression/real/best_model.pth \
   --dataset dataset_manual_prepared/test_robust \
-  --output artifacts/evaluations/regression/manual_test_robust_finetuned \
+  --output artifacts/evaluations/regression/manual_test_robust_real \
   --fixed-threshold 0.5 \
   --thresholds 0.5,1,2,3,4
 ```
@@ -227,7 +212,7 @@ python scripts/evaluation/evaluate_real_dataset.py \
 
 Текущая финальная модель:
 
-- checkpoint: `artifacts/checkpoints/regression/real_finetuned/best_model.pth`
+- checkpoint: `artifacts/checkpoints/regression/real/best_model.pth`
 - обучалась только на реальных размеченных изображениях и их аугментациях из `train/`;
 - threshold фиксировался по `val` и потом использовался на `test`.
 
@@ -280,7 +265,7 @@ python scripts/evaluation/evaluate_real_dataset.py \
 
 ```bash
 python models/segmentation/train.py
-python models/segmentation/inference.py --model checkpoints/best_model.pth --dataset dataset
+python models/segmentation/inference.py --model artifacts/checkpoints/segmentation/best_model.pth --dataset dataset
 ```
 
 ## Проверка
@@ -291,8 +276,3 @@ Unit-тесты:
 pytest
 ```
 
-Интеграционный тест запускается отдельно:
-
-```bash
-python tests/test_integration.py
-```

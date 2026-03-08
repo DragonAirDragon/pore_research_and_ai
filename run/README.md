@@ -8,5 +8,3 @@
 4. `bash run/05_test_regression.sh`
 5. `bash run/06_test_regression_robust.sh`
 6. Или сразу `bash run/run_all_real_pipeline.sh`
-
-`bash run/02_train_regression_on_synthetic.sh` оставлен как опциональный экспериментальный сценарий и не нужен для основного real-data workflow.
