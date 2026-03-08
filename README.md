@@ -6,7 +6,7 @@
 
 - ручная разметка реальных изображений,
 - подготовка корректного `train/val/test`,
-- дообучение regression-модели,
+- обучение regression-модели на реальных данных и их аугментациях,
 - оценка на отложенном реальном тесте.
 
 В репозитории есть две ветки моделей:
@@ -30,7 +30,7 @@
 - `dataset_manual_prepared/` — подготовленный real dataset со split-ами.
 - `artifacts/checkpoints/` — все обученные модели и checkpoint-файлы.
 - `artifacts/evaluations/` — отчеты оценки и визуализации.
-- `artifacts/generated/` — сгенерированные synthetic изображения.
+- `artifacts/generated/` — сгенерированные изображения для дополнительных экспериментов.
 
 Если смотреть только на порядок запуска, то ориентироваться нужно прежде всего на папку `run/`.
 
@@ -40,21 +40,21 @@
 
 1. Разметить реальные изображения.
 2. Собрать `train/val/test`.
-3. При необходимости обучить модель на synthetic данных.
-4. Дообучить модель на реальных данных.
-5. Проверить качество на `val`.
-6. Проверить итоговое качество на `test`.
-7. Проверить устойчивость на `test_robust`.
+3. Обучить модель на реальных данных и их аугментациях.
+4. Проверить качество на `val`.
+5. Проверить итоговое качество на `test`.
+6. Проверить устойчивость на `test_robust`.
 
 Готовые команды лежат в:
 
 - `run/01_prepare_real_dataset.sh`
-- `run/02_train_regression_on_synthetic.sh`
-- `run/03_finetune_regression_on_real.sh`
+- `run/03_train_regression_on_real.sh`
 - `run/04_validate_regression.sh`
 - `run/05_test_regression.sh`
 - `run/06_test_regression_robust.sh`
 - `run/run_all_real_pipeline.sh`
+
+Опционально в репозитории оставлен `run/02_train_regression_on_synthetic.sh`, но он не относится к текущему основному пайплайну и не использовался для итоговых метрик ниже.
 
 Запускать их можно так:
 
@@ -141,42 +141,14 @@ dataset_manual_prepared/
 - `test/` — отдельные изображения для итоговой проверки;
 - `test_robust/` — искаженные версии тестовых изображений для stress-test.
 
-## Шаг 3. Synthetic данные
+## Шаг 3. Обучение regression-модели
 
-Если нужен synthetic pretraining:
-
-```bash
-python scripts/data_prep/generate_dataset.py --total 5000 --batch-size 100
-python prepare_dataset.py
-```
-
-Для regression distance maps:
-
-```bash
-python models/regression/generate_distance_dataset.py
-```
-
-Это создает `dataset_regression/`.
-
-## Шаг 4. Обучение regression-модели
-
-Обучение на synthetic данных:
-
-```bash
-python models/regression/train.py \
-  --dataset dataset_regression \
-  --checkpoint-dir artifacts/checkpoints/regression/synthetic \
-  --epochs 50 \
-  --batch-size 8
-```
-
-Дообучение на реальных данных от уже обученного synthetic checkpoint:
+Основной рабочий вариант в этом проекте: обучение на `dataset_manual_prepared`, где `train/` уже состоит из реальных изображений и их аугментаций.
 
 ```bash
 python models/regression/train.py \
   --dataset dataset_manual_prepared \
   --checkpoint-dir artifacts/checkpoints/regression/real_finetuned \
-  --init-model artifacts/checkpoints/regression/synthetic/best_model.pth \
   --epochs 25 \
   --batch-size 4 \
   --learning-rate 1e-4
@@ -188,7 +160,19 @@ python models/regression/train.py \
 - сохраняет `best_model.pth` и `last_model.pth`;
 - пишет `history.json` и `training_history.png`.
 
-## Шаг 5. Оценка качества
+## Опционально: synthetic эксперименты
+
+В репозитории остаются скрипты для synthetic генерации и отдельных экспериментов:
+
+```bash
+python scripts/data_prep/generate_dataset.py --total 5000 --batch-size 100
+python prepare_dataset.py
+python models/regression/generate_distance_dataset.py
+```
+
+Но текущая основная модель и приведенные ниже метрики на них не опираются.
+
+## Шаг 4. Оценка качества
 
 Оценивать модель нужно так:
 
@@ -244,14 +228,14 @@ python scripts/evaluation/evaluate_real_dataset.py \
 Текущая финальная модель:
 
 - checkpoint: `artifacts/checkpoints/regression/real_finetuned/best_model.pth`
-- стартовала от synthetic pretrained checkpoint;
-- дообучалась на 4 размеченных реальных изображениях;
+- обучалась только на реальных размеченных изображениях и их аугментациях из `train/`;
 - threshold фиксировался по `val` и потом использовался на `test`.
 
 Как определялась итоговая точность простым языком:
 
-- сначала модель обучили на synthetic данных;
-- потом дообучили на нескольких реальных размеченных изображениях;
+- несколько реальных изображений вручную разметили;
+- из тренировочной части сделали аугментации, но без смешивания с `val` и `test`;
+- модель обучили только на этом real train split;
 - одно реальное изображение отложили под `val` и использовали только для выбора threshold;
 - другое реальное изображение полностью отложили под финальный `test` и не использовали в обучении;
 - дополнительно взяли 8 искаженных версий этого же тестового изображения и проверили устойчивость модели.
